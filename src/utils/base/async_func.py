@@ -101,7 +101,6 @@ async def dowanloadPixivRank(bot:Bot):
             aapi =  AppPixivAPI(client=client)
             aapi.set_accept_language('zh')
             log.info('正在登录P站')
-            _REFRESH_TOKEN = "7H6TRydoicppWFXJ2ICpZQFT-OZ5kW9cHRsDEP76kCk"
             await aapi.login(refresh_token=_REFRESH_TOKEN)
             log.info('正在获取P站排行')
             
