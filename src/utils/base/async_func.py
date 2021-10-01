@@ -82,68 +82,87 @@ async def clean_image_file():
 
 
 # PIXIV #
+retryable_error = (ConnectionResetError,ClientError,ConnectionError)
+class AppPixiv:
+    
+    def __init__(self,aapi:AppPixivAPI) -> None:
+        aapi.set_accept_language('zh')
+        self.aapi = aapi
+
+        # 读取本地的pixiv排行信息
+        if os.path.exists(path.ILLUSTION_PATH):
+            with open(path.ILLUSTION_PATH,'r') as f:
+                local_rankinfo = json.load(f)['info']
+
+        self.local_rankinfo = local_rankinfo if local_rankinfo else {}
+
+        pass
+
+    def need_update(self):
+        old_urllist=[img['download_url'] for img in self.local_rankinfo]
+        new_urllist=[img['download_url'] for img in self.new_rankinfo]
+        return old_urllist != new_urllist
+
+
+    @retry(*retryable_error,retries=5,cooldown=60*3)
+    async def login(self):
+        await self.aapi.login(refresh_token=_REFRESH_TOKEN)
+
+    @retry(*retryable_error,retries=5,cooldown=60*3)
+    async def get_new_rankinfo(self,date:str=None):
+
+        rank_info = (await self.aapi.illust_ranking(date=date))['illusts']
+
+        for index,img in enumerate(rank_info) :
+            # print(img['title'],img['sanity_level'])
+            original_url = img.meta_single_page.original_image_url if img.meta_single_page else img.meta_pages[0].image_urls.original
+            large_url = img.image_urls.large
+            img['download_url'] = large_url
+            img['file_name'] = 'Rank{}.jpg'.format(index)
+            img['file_path'] = os.path.join(path.DAILYRANK_FOLDER_PATH, img['file_name'])
+
+        self.new_rankinfo = rank_info
+
+    @retry(*retryable_error,retries=5,cooldown=60*3)
+    async def download(self,img:dict):
+        await self.aapi.download(img['download_url'],fname = open(img['file_path'], 'wb'))
+        im = Image.open(img['file_path']).convert("RGB")
+        im.save(img['file_path'], "JPEG")
+
 
 
 illusts = {'info':{}}
 
 async def dowanloadPixivRank(bot:Bot):
-    retryable_error = (ConnectionResetError,ClientError,ConnectionError)
 
-    def need_download(old_illusts:dict, new_illusts:dict):
-        old_urllist=[img['download_url'] for img in old_illusts]
-        new_urllist=[img['download_url'] for img in new_illusts]
-        return old_urllist != new_urllist
+    try:
+        date_str= str(date.today()-timedelta(2))
 
-
-    @retry(*retryable_error,retries=5,cooldown=60*10)
-    async def update_rank():
         async with PixivClient(proxy=path.PROXY) as client:
-            aapi =  AppPixivAPI(client=client)
-            aapi.set_accept_language('zh')
-            log.info('正在登录P站')
-            await aapi.login(refresh_token=_REFRESH_TOKEN)
-            log.info('正在获取P站排行')
+            aapi = AppPixiv(AppPixivAPI(client=client))
+            log.info('正在登录P站');await aapi.login()
+            log.info('正在获取P站排行');await aapi.get_new_rankinfo(date_str)
             
-            info = (await aapi.illust_ranking())['illusts']
-
-            for index,img in enumerate(info) :
-                # print(img['title'],img['sanity_level'])
-                original_url = img.meta_single_page.original_image_url if img.meta_single_page else img.meta_pages[0].image_urls.original
-                large_url = img.image_urls.large
-                img['download_url'] = large_url
-                img['file_name'] = 'Rank{}.jpg'.format(index)
-                img['file_path'] = os.path.join(path.DAILYRANK_FOLDER_PATH, img['file_name'])
-
-            if not need_download(illusts['info'], info):
-                log.info('P站日榜无需更新')
-                await send_private_msg(bot,1061439585,None,'{}P站日榜无需更新'.format(date.today()))
-            else:
-                illusts['info']=info
-
+            if aapi.need_update():
                 log.info('正在更新P站排行')
-                for index,img in enumerate(info) :
-                    await aapi.download(img['download_url'],fname = open(img['file_path'], 'wb'))
-                    im = Image.open(img['file_path']).convert("RGB")
-                    im.save(img['file_path'], "JPEG")
-                    print(index,large_url)
+                for index,img in enumerate(aapi.new_rankinfo) :
+                    await aapi.download(img)
+                    print('已更新：',index, img['download_url'])
 
+                # 下载完成，保存当前排行榜信息到本地
+                illusts['info'] = aapi.new_rankinfo
                 with open(path.ILLUSTION_PATH,'w') as f:
                     json.dump(illusts,f)
-                    log.info('P站日榜更新完成')
+                    log.info('{}P站更新完成'.format(date_str))
+                    await send_private_msg(bot,1061439585,None,'{}P站更新完成'.format(date_str))
+            else:
+                log.info('P站日榜无需更新')
+                await send_private_msg(bot,1061439585,None,'{}P站日榜无需更新'.format(date_str))
 
-
-    # 读取本地的pixiv排行信息
-    if os.path.exists(path.ILLUSTION_PATH):
-        with open(path.ILLUSTION_PATH,'r') as f:
-            illusts['info'] = json.load(f)['info']
-    try:
-        await update_rank()
     except RetryExhaustedError:
-        log.info('{}P站连接失败'.format(date.today()))
-        await send_private_msg(bot,1061439585,None,'{}P站连接失败'.format(date.today()))
-    else:
-        log.info('{}P站更新完成'.format(date.today()))
-        await send_private_msg(bot,1061439585,None,'{}P站更新完成'.format(date.today()))
+        log.info('{}P站连接失败'.format(date_str))
+        await send_private_msg(bot,1061439585,None,'{}P站连接失败'.format(date_str))
+
 
 
 
