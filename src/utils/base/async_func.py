@@ -136,12 +136,11 @@ illusts = {'info':{}}
 async def dowanloadPixivRank(bot:Bot):
 
     try:
-        date_str= str(date.today()-timedelta(2))
 
         async with PixivClient(proxy=path.PROXY) as client:
             aapi = AppPixiv(AppPixivAPI(client=client))
             log.info('正在登录P站');await aapi.login()
-            log.info('正在获取P站排行');await aapi.get_new_rankinfo(date_str)
+            log.info('正在获取P站排行');await aapi.get_new_rankinfo(str(date.today()-timedelta(2)))
             
             if aapi.need_update():
                 log.info('正在更新P站排行')
@@ -153,15 +152,15 @@ async def dowanloadPixivRank(bot:Bot):
                 illusts['info'] = aapi.new_rankinfo
                 with open(path.ILLUSTION_PATH,'w') as f:
                     json.dump(illusts,f)
-                    log.info('{}P站更新完成'.format(date_str))
-                    await send_private_msg(bot,1061439585,None,'{}P站更新完成'.format(date_str))
+                    log.info('{}P站更新完成'.format(date.today()))
+                    await send_private_msg(bot,1061439585,None,'P站更新完成-{}'.format(date.today()))
             else:
                 log.info('P站日榜无需更新')
-                await send_private_msg(bot,1061439585,None,'{}P站日榜无需更新'.format(date_str))
+                await send_private_msg(bot,1061439585,None,'P站日榜无需更新-{}'.format(date.today()))
 
     except RetryExhaustedError:
-        log.info('{}P站连接失败'.format(date_str))
-        await send_private_msg(bot,1061439585,None,'{}P站连接失败'.format(date_str))
+        log.info('{}P站连接失败'.format(date.today()))
+        await send_private_msg(bot,1061439585,None,'P站连接失败-{}'.format(date.today()))
 
 
 
