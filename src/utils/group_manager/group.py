@@ -26,7 +26,7 @@ class Group:
             if (self.safe_group == True) or int(img['sanity_level']) < 4:
                 info.append( str(image(abspath= img['file_path'])))
             else:
-                info.append('[此图片限制级别过高，请自行访问P站查看]')
+                info.append('[此图片限制级别过高，请自行访问P站查看或向开发者申请安全组权限]')
             info.append('ID:{}'.format(img['id']))
             nodes.append(node_make(sender['card'] or sender['nickname'], str(sender['user_id']), '\n'.join(info)))
         return forward(*nodes)
