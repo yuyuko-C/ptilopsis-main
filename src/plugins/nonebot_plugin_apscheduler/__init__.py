@@ -78,6 +78,11 @@ async def run_everyday_only_once():
             group_id = user_ins.subs_group_id
             await send_private_msg(bot, user_id, group_id, text('别摸鱼了，博士。该午休了。'))
 
+@scheduler.scheduled_job("interval",hours=4)
+async def run_every_4_hour():
+    #用于防止数据库断连
+    LoggerManger.hasPrivateTopic(702754786)
+
 @scheduler.scheduled_job("cron",hour='11,16-20/2')
 async def run_every_2_hour():
     bot = get_bot()
